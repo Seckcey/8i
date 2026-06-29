@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 8i Wallet
 
-## Getting Started
+8i Wallet is a prepaid AI credit wallet by 8 West Ventures. Users buy 8i Credits and spend them inside the platform on AI chat, agents, automations, document tools, image tools, coding assistants, and future API usage.
 
-First, run the development server:
+8i Credits are prepaid software credits only. They are not crypto tokens, investment products, money-transfer balances, cash-out balances, or third-party provider credits.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
+## Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Prisma
+- Supabase Postgres and Supabase Auth
+- Stripe Checkout
+- OpenAI SDK
+- Zod validation
+
+## Current State
+
+This repository currently contains the Phase 1 app shell and foundation schema work:
+
+- Public pages for home, pricing, terms, and privacy
+- Placeholder authenticated pages for dashboard, wallet, usage, and settings
+- MVP Prisma models for profiles, wallets, append-only ledger records, credit packages, Stripe records, AI request metadata, provider usage, and admin audit logs
+- Typed environment validation helpers in `src/lib/env`
+
+Runtime auth, wallet mutation services, Stripe checkout/webhooks, OpenAI provider routing, and admin tooling are planned next phases.
+
+## Setup
+
+Use PowerShell from the project root.
+
+```powershell
+pnpm install
+Copy-Item .env.example .env
+pnpm prisma:validate
+pnpm prisma:generate
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000` after the dev server starts.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Required variables are listed in `.env.example` and validated with Zod helpers:
 
-## Learn More
+- Database: `DATABASE_URL`, `DIRECT_URL`
+- Public app/Supabase config: `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Server secrets: `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `OPENAI_API_KEY`
+- AI and credit settings: `OPENAI_DEFAULT_MODEL`, `CREDIT_UNIT_SCALE`, `DEFAULT_CREDIT_MARGIN_BPS`, `MIN_AI_DEBIT_UNITS`
+- Admin/bootstrap settings: `ADMIN_EMAIL_ALLOWLIST`, `LOG_LEVEL`
 
-To learn more about Next.js, take a look at the following resources:
+Do not commit real secret values. Only `NEXT_PUBLIC_*` values may be exposed to browser code.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Validation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```powershell
+pnpm lint
+pnpm typecheck
+pnpm build
+```
 
-## Deploy on Vercel
+Run `pnpm prisma:validate` after schema changes. Run `pnpm prisma:generate` before adding server code that imports the generated Prisma client.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Product Guardrails
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Do not build cash-out, withdrawals, peer-to-peer transfers, resale, investment language, or anything implying 8i Credits appreciate in value or represent ownership of third-party model/provider credits.
+
+Wallet mutations must be server-side only and recorded as append-only ledger entries. Stripe webhook handling must verify signatures and process paid-credit grants idempotently.

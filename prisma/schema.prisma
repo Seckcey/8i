@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +5,288 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum ProfileRole {
+  USER  @map("user")
+  ADMIN @map("admin")
+
+  @@map("profile_role")
+}
+
+enum ProfileStatus {
+  ACTIVE   @map("active")
+  DISABLED @map("disabled")
+
+  @@map("profile_status")
+}
+
+enum WalletStatus {
+  ACTIVE   @map("active")
+  DISABLED @map("disabled")
+
+  @@map("wallet_status")
+}
+
+enum WalletLedgerEntryType {
+  STRIPE_PURCHASE_CREDIT @map("stripe_purchase_credit")
+  AI_USAGE_DEBIT         @map("ai_usage_debit")
+  ADMIN_CREDIT           @map("admin_credit")
+  ADMIN_DEBIT            @map("admin_debit")
+  REFUND_DEBIT           @map("refund_debit")
+  REVERSAL_CREDIT        @map("reversal_credit")
+
+  @@map("wallet_ledger_entry_type")
+}
+
+enum WalletLedgerSourceType {
+  STRIPE_CHECKOUT @map("stripe_checkout")
+  PROVIDER_USAGE  @map("provider_usage")
+  ADMIN           @map("admin")
+  REFUND          @map("refund")
+  REVERSAL        @map("reversal")
+  SYSTEM          @map("system")
+
+  @@map("wallet_ledger_source_type")
+}
+
+enum StripeCheckoutSessionStatus {
+  CREATED  @map("created")
+  OPEN     @map("open")
+  COMPLETE @map("complete")
+  EXPIRED  @map("expired")
+  CANCELED @map("canceled")
+  FAILED   @map("failed")
+
+  @@map("stripe_checkout_session_status")
+}
+
+enum StripeEventProcessingStatus {
+  RECEIVED   @map("received")
+  PROCESSING @map("processing")
+  PROCESSED  @map("processed")
+  FAILED     @map("failed")
+  IGNORED    @map("ignored")
+
+  @@map("stripe_event_processing_status")
+}
+
+enum AiRequestStatus {
+  PENDING   @map("pending")
+  SUCCEEDED @map("succeeded")
+  FAILED    @map("failed")
+  CANCELED  @map("canceled")
+
+  @@map("ai_request_status")
+}
+
+model Profile {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String        @db.Text
+  displayName String?       @map("display_name") @db.Text
+  role        ProfileRole   @default(USER)
+  status      ProfileStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  wallet                 Wallet?
+  stripeCustomer         StripeCustomer?
+  checkoutSessions       StripeCheckoutSession[]
+  aiRequests             AiRequest[]
+  providerUsage          ProviderUsage[]
+  walletLedgerEntries    WalletLedger[]          @relation("WalletLedgerUser")
+  adminWalletLedgerItems WalletLedger[]          @relation("WalletLedgerAdmin")
+  adminAuditLogs         AdminAuditLog[]         @relation("AdminAuditActor")
+
+  @@index([email], map: "profiles_email_idx")
+  @@index([role], map: "profiles_role_idx")
+  @@map("profiles")
+}
+
+model Wallet {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String       @unique @map("user_id") @db.Uuid
+  cachedBalanceUnits BigInt       @default(0) @map("cached_balance_units")
+  status             WalletStatus @default(ACTIVE)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                Profile        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  walletLedgerEntries WalletLedger[]
+  aiRequests          AiRequest[]
+
+  @@index([status], map: "wallets_status_idx")
+  @@map("wallets")
+}
+
+model WalletLedger {
+  id                 String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId           String                 @map("wallet_id") @db.Uuid
+  userId             String                 @map("user_id") @db.Uuid
+  entryType          WalletLedgerEntryType  @map("entry_type")
+  amountUnits        BigInt                 @map("amount_units")
+  balanceBeforeUnits BigInt                 @map("balance_before_units")
+  balanceAfterUnits  BigInt                 @map("balance_after_units")
+  sourceType         WalletLedgerSourceType @map("source_type")
+  sourceId           String?                @map("source_id") @db.Text
+  idempotencyKey     String                 @unique @map("idempotency_key") @db.Text
+  reason             String?                @db.Text
+  adminUserId        String?                @map("admin_user_id") @db.Uuid
+  metadata           Json?
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  wallet                  Wallet                 @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  user                    Profile                @relation("WalletLedgerUser", fields: [userId], references: [id], onDelete: Restrict)
+  adminUser               Profile?               @relation("WalletLedgerAdmin", fields: [adminUserId], references: [id], onDelete: Restrict)
+  creditedCheckoutSession StripeCheckoutSession? @relation("CreditedCheckoutSession")
+  providerUsage           ProviderUsage?         @relation("ProviderUsageLedger")
+
+  @@index([walletId], map: "wallet_ledger_wallet_id_idx")
+  @@index([userId], map: "wallet_ledger_user_id_idx")
+  @@index([adminUserId], map: "wallet_ledger_admin_user_id_idx")
+  @@index([sourceType, sourceId], map: "wallet_ledger_source_idx")
+  @@index([createdAt], map: "wallet_ledger_created_at_idx")
+  @@map("wallet_ledger")
+}
+
+model CreditPackage {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug          String   @unique @db.Text
+  name          String   @db.Text
+  description   String?  @db.Text
+  creditUnits   BigInt   @map("credit_units")
+  priceCents    BigInt   @map("price_cents")
+  currency      String   @default("usd") @db.Text
+  stripePriceId String?  @map("stripe_price_id") @db.Text
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  checkoutSessions StripeCheckoutSession[]
+
+  @@index([active, sortOrder], map: "credit_packages_active_sort_order_idx")
+  @@map("credit_packages")
+}
+
+model StripeCustomer {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @unique @map("user_id") @db.Uuid
+  stripeCustomerId String   @unique @map("stripe_customer_id") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("stripe_customers")
+}
+
+model StripeCheckoutSession {
+  id                      String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String                      @map("user_id") @db.Uuid
+  creditPackageId         String                      @map("credit_package_id") @db.Uuid
+  stripeCheckoutSessionId String                      @unique @map("stripe_checkout_session_id") @db.Text
+  stripeCustomerId        String?                     @map("stripe_customer_id") @db.Text
+  status                  StripeCheckoutSessionStatus
+  creditUnits             BigInt                      @map("credit_units")
+  amountTotalCents        BigInt?                     @map("amount_total_cents")
+  currency                String?                     @db.Text
+  creditedLedgerEntryId   String?                     @unique @map("credited_ledger_entry_id") @db.Uuid
+  createdAt               DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt             DateTime?                   @map("completed_at") @db.Timestamptz(6)
+
+  user                Profile       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  creditPackage       CreditPackage @relation(fields: [creditPackageId], references: [id], onDelete: Restrict)
+  creditedLedgerEntry WalletLedger? @relation("CreditedCheckoutSession", fields: [creditedLedgerEntryId], references: [id], onDelete: Restrict)
+
+  @@index([userId], map: "stripe_checkout_sessions_user_id_idx")
+  @@index([creditPackageId], map: "stripe_checkout_sessions_credit_package_id_idx")
+  @@index([status], map: "stripe_checkout_sessions_status_idx")
+  @@index([createdAt], map: "stripe_checkout_sessions_created_at_idx")
+  @@map("stripe_checkout_sessions")
+}
+
+model StripeEvent {
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stripeEventId    String                      @unique @map("stripe_event_id") @db.Text
+  eventType        String                      @map("event_type") @db.Text
+  processingStatus StripeEventProcessingStatus @map("processing_status")
+  payload          Json
+  errorMessage     String?                     @map("error_message") @db.Text
+  receivedAt       DateTime                    @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt      DateTime?                   @map("processed_at") @db.Timestamptz(6)
+
+  @@index([processingStatus], map: "stripe_events_processing_status_idx")
+  @@index([receivedAt], map: "stripe_events_received_at_idx")
+  @@map("stripe_events")
+}
+
+model AiRequest {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  walletId            String          @map("wallet_id") @db.Uuid
+  provider            String          @db.Text
+  model               String          @db.Text
+  status              AiRequestStatus
+  responseId          String?         @map("response_id") @db.Text
+  promptPreview       String?         @map("prompt_preview") @db.Text
+  promptHash          String?         @map("prompt_hash") @db.Text
+  inputTokenEstimate  BigInt?         @map("input_token_estimate")
+  outputTokenEstimate BigInt?         @map("output_token_estimate")
+  errorCode           String?         @map("error_code") @db.Text
+  errorMessage        String?         @map("error_message") @db.Text
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt         DateTime?       @map("completed_at") @db.Timestamptz(6)
+
+  user          Profile        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet        Wallet         @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  providerUsage ProviderUsage?
+
+  @@index([userId], map: "ai_requests_user_id_idx")
+  @@index([walletId], map: "ai_requests_wallet_id_idx")
+  @@index([status], map: "ai_requests_status_idx")
+  @@index([createdAt], map: "ai_requests_created_at_idx")
+  @@map("ai_requests")
+}
+
+model ProviderUsage {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  aiRequestId        String   @unique @map("ai_request_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  provider           String   @db.Text
+  model              String   @db.Text
+  inputTokens        BigInt?  @map("input_tokens")
+  outputTokens       BigInt?  @map("output_tokens")
+  totalTokens        BigInt?  @map("total_tokens")
+  providerCostMicros BigInt?  @map("provider_cost_micros")
+  creditUnitsDebited BigInt?  @map("credit_units_debited")
+  walletLedgerId     String?  @unique @map("wallet_ledger_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  aiRequest    AiRequest     @relation(fields: [aiRequestId], references: [id], onDelete: Restrict)
+  user         Profile       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  walletLedger WalletLedger? @relation("ProviderUsageLedger", fields: [walletLedgerId], references: [id], onDelete: Restrict)
+
+  @@index([userId], map: "provider_usage_user_id_idx")
+  @@index([createdAt], map: "provider_usage_created_at_idx")
+  @@map("provider_usage")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminUserId String   @map("admin_user_id") @db.Uuid
+  action      String   @db.Text
+  targetType  String   @map("target_type") @db.Text
+  targetId    String?  @map("target_id") @db.Text
+  metadata    Json?
+  ipAddress   String?  @map("ip_address") @db.Text
+  userAgent   String?  @map("user_agent") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser Profile @relation("AdminAuditActor", fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([adminUserId], map: "admin_audit_log_admin_user_id_idx")
+  @@index([targetType, targetId], map: "admin_audit_log_target_idx")
+  @@index([createdAt], map: "admin_audit_log_created_at_idx")
+  @@map("admin_audit_log")
 }
