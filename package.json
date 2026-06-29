@@ -15,7 +15,6 @@
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "openai": "^6.45.0",
-    "prisma": "^7.8.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "stripe": "^22.3.0",
@@ -30,6 +29,7 @@
     "eslint-config-next": "16.2.9",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.1",
+    "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
