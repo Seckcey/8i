@@ -1,0 +1,9 @@
+model = "gpt-5.5"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+project_doc_fallback_filenames = ["README.md", "docs/PROJECT_BASELINE.md"]
+project_doc_max_bytes = 65536
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
