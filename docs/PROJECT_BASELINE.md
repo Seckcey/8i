@@ -1,4 +1,4 @@
-# 8i Wallet Project Baseline
+﻿# 8i Wallet Project Baseline
 
 ## MVP goal
 
